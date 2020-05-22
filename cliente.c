@@ -204,8 +204,8 @@ int main(int argc, char *argv[])
     char buffer[32];
 
     solicitarConexion();
-    while (1)
-        mostrarMenu();
+    //while (1)
+    mostrarMenu();
 
     //r = recv(clientfd, buffer, 32, 0);
     //buffer[r] = 0;
