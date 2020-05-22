@@ -7,6 +7,12 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <signal.h>
+#include <ctype.h>
+#include <math.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <termios.h>
 
 #define PORT 3535
 #define IP_SERVER "127.0.0.1"
@@ -17,14 +23,14 @@ ssize_t bytesRead, bytesSent;
 
 struct dogType
 {
-  long int id;
-  char nombre[32];
-  char tipo[32];
-  int edad;
-  char raza[16];
-  int estatura;
-  float peso;
-  char sexo;
+    long int id;
+    char nombre[32];
+    char tipo[32];
+    int edad;
+    char raza[16];
+    int estatura;
+    float peso;
+    char sexo;
 };
 
 void sig_handler(int signo)
@@ -55,36 +61,94 @@ void solicitarConexion()
     printf("Conexión exitosa\n");
 }
 
-void enviarMensaje(void *message, size_t len)
+void enviarMensaje(void *mensaje, size_t len)
 {
-    if ((bytesSent = send(clientfd, message, len, 0)) == -1)
+    if ((bytesSent = send(clientfd, mensaje, len, 0)) == -1)
     {
-        perror("Error sending message.");
+        perror("Error enviando el mensaje.");
         return;
     }
 }
 
-void ingresarRegistro(void *ap){
-
+void recibirMensaje(void *mensaje, size_t len)
+{
+    if ((bytesRead = recv(clientfd, mensaje, len, 0)) <= 0)
+    {
+        perror("Error recibiendo el mensaje");
+    }
 }
-void verRegistro(){
 
+void pasarMinusculas(char cadena[])
+{
+    for (int indice = 0; cadena[indice] != '\0'; ++indice)
+    {
+        cadena[indice] = tolower(cadena[indice]);
+    }
 }
-void borrarRegistro(){
 
+void ingresarRegistro(void *ap)
+{
 }
-void buscarRegistro(){
+void verRegistro()
+{
+}
+void borrarRegistro()
+{
+    long int idBorrar;
+    long int rec[2];
+    recibirMensaje(&rec, sizeof(rec));
 
+    printf("Existe un total de : %ld  Registros\n", rec[0]);
+    //----------------BUSQUEDA DEL REGISTRO-----------------------
+    printf("Digite el id de la Mascota a eliminar:\n");
+    scanf("%ld", &idBorrar);
+    while (idBorrar < 0 || idBorrar >= rec[1])
+    {
+        printf("Digite un id Valido para eliminar:\n");
+        scanf("%ld", &idBorrar);
+    }
+
+    enviarMensaje(&idBorrar, sizeof(idBorrar));
+
+    long int idBorrado;
+    recibirMensaje(&idBorrado, sizeof(int));
+
+    if (idBorrado == -1)
+    {
+        printf("Este Id no existe en la base de datos (el registro ya fue eliminado)\n");
+    }
+    else
+    {
+        printf("\nSe eliminó el registro %ld Correctamente!\n", idBorrar);
+    }
+}
+void buscarRegistro()
+{
+    /*
+    char nombre[32];
+    printf("Digite nombre a buscar:\n");
+    scanf("%s", nombre);
+    pasarMinusculas(nombre);
+    enviarMensaje(nombre,sizeof(nombre));
+    struct dogType *mascota;
+
+    for(;;) {
+        recibirMensaje(mascota, sizeof(struct dogType));
+        if(mascota->edad == -1) break;
+        
+        printf("Id: %ld    Nombre: %s\n",mascota->id, nombre);
+    }
+    */
 }
 
 void mostrarMenu()
 {
     //Variables a Utilizar
     FILE *archivo;
-    int decision=0;
+    int decision = 0;
     struct dogType *dato;
-    dato=malloc(sizeof(struct dogType));
-    int programaCorriendo=1;
+    dato = malloc(sizeof(struct dogType));
+    int programaCorriendo = 1;
 
     while (programaCorriendo == 1)
     {
@@ -124,13 +188,11 @@ void mostrarMenu()
         }
 
         printf("\nPulse ENTER para terminar este apartado\n"); //corregir para que funcione con cualquier tecla
-        while (getchar() != '\n');
+        while (getchar() != '\n')
+            ;
         getchar(); // wait for ENTER
-
     }
 }
-
-
 
 int main(int argc, char *argv[])
 {
@@ -142,9 +204,8 @@ int main(int argc, char *argv[])
     char buffer[32];
 
     solicitarConexion();
-    while(1)
+    while (1)
         mostrarMenu();
-
 
     //r = recv(clientfd, buffer, 32, 0);
     //buffer[r] = 0;
