@@ -53,7 +53,7 @@ void solicitarConexion()
     client.sin_port = htons(PORT);
     client.sin_addr.s_addr = inet_addr(IP_SERVER);
 
-    while (connect(clientfd, (struct sockaddr *)&client, (socklen_t)sizeof(struct sockaddr)) < 0)
+    while (connect(clientfd, (struct sockaddr *)&client, (socklen_t)sizeof(struct sockaddr)) != -1)
     {
         perror("Intentando conectar con el servidor... ");
         sleep(1);

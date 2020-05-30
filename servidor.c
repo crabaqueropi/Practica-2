@@ -15,15 +15,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <pthread.h>
 
 #define PORT 3535
-#define BACKLOG 2 //Numero máximo de clientes
+#define BACKLOG 3 //Numero máximo de clientes
 
 int clientesConectados = 0;
 
-int serverfd = 0;
-int clientfd = 0;
-struct sockaddr_in server, client;
+int serverfd;
+int clientfd;
+struct sockaddr_in server;
 ssize_t bytesRead, bytesSent;
 
 //----------------Variables Globales
@@ -94,8 +95,11 @@ int aceptarConexion()
 {
     //addrlen = sizeof(dummyAddr);
     //socketClient = accept(socketServer, (struct sockaddr*) &dummyAddr, &addrlen);
+    struct sockaddr_in client;
 
+    int clientfd;
     socklen_t tamano;
+
     clientfd = accept(serverfd, (struct sockaddr *)&client, &tamano);
 
     if (clientfd == -1)
@@ -103,7 +107,9 @@ int aceptarConexion()
         perror("Error with connection.");
         //memset(ipDirection, -1, sizeof(ipDirection));
         return 0;
-    }else{
+    }
+    else
+    {
         clientesConectados++;
         printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
     }
@@ -114,21 +120,21 @@ int aceptarConexion()
 
     inet_ntop(AF_INET, &ipAddr, ipDirection, sizeof(ipDirection));
     */
-    return 1;
+    return clientfd;
 }
 
-void enviarMensaje(void *mensaje, size_t len)
+void enviarMensaje(int clienteID, void *mensaje, size_t len)
 {
-    if ((bytesSent = send(clientfd, mensaje, len, 0)) == -1)
+    if ((bytesSent = send(clienteID, mensaje, len, 0)) == -1)
     {
         perror("Error enviando el mensaje.");
         return;
     }
 }
 
-void recibirMensaje(void *pointer, size_t len)
+void recibirMensaje(int clienteID, void *pointer, size_t len)
 {
-    if ((bytesRead = read(clientfd, pointer, len)) <= 0)
+    if ((bytesRead = read(clienteID, pointer, len)) <= 0)
     {
         perror("Error receiving menu option");
     }
@@ -341,15 +347,15 @@ void ingresarRegistro()
 void verRegistro()
 {
 }
-void borrarRegistro()
+void borrarRegistro(int clienteID)
 {
     long int env[2];
     env[0] = numRegTotales;
     env[1] = numMaxRegHistorial;
-    enviarMensaje(&env, sizeof(env));
+    enviarMensaje(clienteID, &env, sizeof(env));
 
     long int idBorrar;
-    recibirMensaje(&idBorrar, sizeof(idBorrar));
+    recibirMensaje(clienteID, &idBorrar, sizeof(idBorrar));
 
     // ------------Variables a usar-------------------
     //Variables borrar registros
@@ -384,7 +390,7 @@ void borrarRegistro()
     if (idEncontrado == -1)
     {
         //printf("Este Id no existe en la base de datos (el registro ya fue eliminado)\n");
-        enviarMensaje(&idEncontrado, sizeof(idEncontrado));
+        enviarMensaje(clienteID, &idEncontrado, sizeof(idEncontrado));
     }
     else
     {
@@ -415,7 +421,7 @@ void borrarRegistro()
         }
         //Mensaje éxito
         //printf("\nSe eliminó el registro %li Correctamente!\n", idBorrar);
-        enviarMensaje(&idBorrar, sizeof(idBorrar));
+        enviarMensaje(clienteID, &idBorrar, sizeof(idBorrar));
 
         //----------------Remover de Tabla Hash-----------------------
         pasarMinusculas(nombre);
@@ -555,10 +561,10 @@ void borrarRegistro()
     }
 }
 
-void buscarRegistro()
+void buscarRegistro(int clienteID)
 {
     char nombre[32];
-    recibirMensaje(nombre, sizeof(nombre));
+    recibirMensaje(clienteID, nombre, sizeof(nombre));
     printf("Nombre: %s\n", nombre);
 
     //registerOperation(getClientIp(), READING, nombre, sizeof(nombre));
@@ -619,7 +625,7 @@ void buscarRegistro()
                     {
                         mascota.nombre[contador] = 0;
                         //printf("Id: %ld    Nombre: %s\n", mascota.id, mascota.nombre);
-                        enviarMensaje(&mascota.id, sizeof(mascota.id));
+                        enviarMensaje(clienteID, &mascota.id, sizeof(mascota.id));
                         mascotasEncontradas++;
                     }
                 }
@@ -655,7 +661,7 @@ void buscarRegistro()
                         {
                             mascota.nombre[contador] = 0;
                             //printf("Id: %ld    Nombre: %s\n", mascota.id, mascota.nombre);
-                            enviarMensaje(&mascota.id, sizeof(mascota.id));
+                            enviarMensaje(clienteID, &mascota.id, sizeof(mascota.id));
                             mascotasEncontradas++;
                         }
                     }
@@ -682,34 +688,51 @@ void buscarRegistro()
         printf("No existen registros en la tabla Hash\n");
     }
     long int finOperacion = -2;
-    enviarMensaje(&finOperacion, sizeof(finOperacion));
+    enviarMensaje(clienteID, &finOperacion, sizeof(finOperacion));
     fclose(archivo1);
 }
 
-void seleccionarOpcion(int opcion)
+void *seleccionarOpcion(void *ap)
 {
 
-    switch (opcion)
+    int *clienteID = ap;
+
+    if (*clienteID != -1)
     {
-    case 1:
-        ingresarRegistro();
-        break;
-    case 2:
-        verRegistro();
-        break;
-    case 3:
-        borrarRegistro();
-        break;
-    case 4:
-        buscarRegistro();
-        break;
-    case 5:
-        printf("Cerrando Conexión.\n");
-        clientesConectados--;
-        break;
-    default:
-        printf("No es una opción valida. Volverá al Menú principal\n");
-        break;
+        printf("\n****Cliente: %i\n", *clienteID);
+        int opcion;
+        int clienteMostrar = *clienteID;
+
+        do
+        {
+            recibirMensaje(*clienteID, &opcion, sizeof(int));
+            printf("\nOpción: %i    Cliente: %i\n", opcion, clienteMostrar);
+
+            switch (opcion)
+            {
+            case 1:
+                ingresarRegistro();
+                break;
+            case 2:
+                verRegistro();
+                break;
+            case 3:
+                borrarRegistro(*clienteID);
+                break;
+            case 4:
+                buscarRegistro(*clienteID);
+                break;
+            case 5:
+                printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar);
+                clientesConectados--;
+                printf("\nClientes conectados: %i\n", clientesConectados);
+                close(*clienteID);
+                break;
+            default:
+                printf("No es una opción valida. Volverá al Menú principal\n");
+                break;
+            }
+        }while (opcion != 5);
     }
 }
 
@@ -721,33 +744,31 @@ int main()
     iniciarServidor();
     obtenerNumReg();
 
-    int opcion = 0;
+    //int opcion = 0;
+
+    pthread_t hilo[BACKLOG];
+    int clientes[BACKLOG];
+    int r;
+    int conta = 0;
+    int clienteID;
 
     while (true)
     {
-        while (aceptarConexion() == 1)
+        clienteID = aceptarConexion();
+        if (clienteID > 0)
         {
-            while (opcion != 5)
+            clientes[conta] = clienteID;
+            clientfd = clienteID;
+            r = pthread_create(&hilo[conta], NULL, (void *)seleccionarOpcion, (void *)&clientes[conta]);
+            if (r != 0)
             {
-                recibirMensaje(&opcion, sizeof(int));
-                printf("\nOpción: %i\n", opcion);
-                seleccionarOpcion(opcion);
+                perror("\n-->pthread_create error: ");
+                exit(-1);
             }
-            opcion = 0;
+            //seleccionarOpcion();
+            conta++;
+            clienteID = -1;
         }
     }
-
-    /*
-    int r;
-    
-    r = send(clientfd, "hola mundo", 10, 0);
-    if (r < 0)
-    {
-        perror("\n-->Error en send(): ");
-        exit(-1);
-    }
-    */
-
-    close(clientfd);
     close(serverfd);
 }
