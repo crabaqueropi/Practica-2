@@ -122,23 +122,36 @@ void borrarRegistro()
         printf("\nSe eliminó el registro %ld Correctamente!\n", idBorrar);
     }
 }
+
 void buscarRegistro()
 {
-    /*
+
     char nombre[32];
     printf("Digite nombre a buscar:\n");
     scanf("%s", nombre);
     pasarMinusculas(nombre);
-    enviarMensaje(nombre,sizeof(nombre));
+    enviarMensaje(nombre, sizeof(nombre));
     struct dogType *mascota;
 
-    for(;;) {
-        recibirMensaje(mascota, sizeof(struct dogType));
-        if(mascota->edad == -1) break;
-        
-        printf("Id: %ld    Nombre: %s\n",mascota->id, nombre);
+    long int idRecibido;
+    int contador = 0;
+
+    while (1)
+    {
+        recibirMensaje(&idRecibido, sizeof(idRecibido));
+        if (idRecibido == -2)
+        {
+            if (contador == 0)
+            {
+                printf("\nNo existen registros con el nombre: %s\n", nombre);
+            }
+            printf("\nFin de la operación\n");
+            break;
+        }
+
+        printf("Id: %ld    Nombre: %s\n", idRecibido, nombre);
+        contador++;
     }
-    */
 }
 
 void mostrarMenu()

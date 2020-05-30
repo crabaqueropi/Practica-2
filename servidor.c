@@ -19,6 +19,8 @@
 #define PORT 3535
 #define BACKLOG 2 //Numero máximo de clientes
 
+int clientesConectados = 0;
+
 int serverfd = 0;
 int clientfd = 0;
 struct sockaddr_in server, client;
@@ -101,6 +103,9 @@ int aceptarConexion()
         perror("Error with connection.");
         //memset(ipDirection, -1, sizeof(ipDirection));
         return 0;
+    }else{
+        clientesConectados++;
+        printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
     }
 
     /*
@@ -411,7 +416,7 @@ void borrarRegistro()
         //Mensaje éxito
         //printf("\nSe eliminó el registro %li Correctamente!\n", idBorrar);
         enviarMensaje(&idBorrar, sizeof(idBorrar));
-        
+
         //----------------Remover de Tabla Hash-----------------------
         pasarMinusculas(nombre);
         contador = 0;
@@ -549,13 +554,13 @@ void borrarRegistro()
         }
     }
 }
+
 void buscarRegistro()
 {
-    /*
     char nombre[32];
     recibirMensaje(nombre, sizeof(nombre));
     printf("Nombre: %s\n", nombre);
-    
+
     //registerOperation(getClientIp(), READING, nombre, sizeof(nombre));
 
     FILE *archivo1;
@@ -579,7 +584,7 @@ void buscarRegistro()
         fread(&posEnTabla2, sizeof(long int), 1, archivo1); //guardo posición de la tabla 2 donde se encuentran datos de este hash
 
         struct nodoType dato;
-        struct dogType *mascota;
+        struct dogType mascota;
 
         if (posEnTabla2 == -1)
         {
@@ -601,20 +606,20 @@ void buscarRegistro()
                 {
                     posicionMascota = (dato.id) * sizeof(struct dogType);
                     fseek(archivoDatos, posicionMascota, SEEK_SET); // pararme en la posición "posEnTabla1" del archivo desde SEEK_SET (principio del fichero)
-                    fread(mascota, sizeof(struct dogType), 1, archivoDatos);
+                    fread(&mascota, sizeof(struct dogType), 1, archivoDatos);
 
-                    pasarMinusculas(mascota->nombre);
+                    pasarMinusculas(mascota.nombre);
                     for (int i = 0; i < contador; i++)
                     {
-                        if (mascota->nombre[i] != nombre[i])
+                        if (mascota.nombre[i] != nombre[i])
                             igualdad = -1;
                     }
 
                     if (igualdad == 0)
                     {
-                        mascota->nombre[contador] = 0;
+                        mascota.nombre[contador] = 0;
                         //printf("Id: %ld    Nombre: %s\n", mascota.id, mascota.nombre);
-                        enviarMensaje(mascota, sizeof(struct dogType));
+                        enviarMensaje(&mascota.id, sizeof(mascota.id));
                         mascotasEncontradas++;
                     }
                 }
@@ -635,22 +640,22 @@ void buscarRegistro()
                     {
                         posicionMascota = (dato.id) * sizeof(struct dogType);
                         fseek(archivoDatos, posicionMascota, SEEK_SET); // pararme en la posición "posEnTabla1" del archivo desde SEEK_SET (principio del fichero)
-                        fread(mascota, sizeof(struct dogType), 1, archivoDatos);
+                        fread(&mascota, sizeof(struct dogType), 1, archivoDatos);
 
                         igualdad = 0;
-                        pasarMinusculas(mascota->nombre);
+                        pasarMinusculas(mascota.nombre);
 
                         for (int i = 0; i < contador; i++)
                         {
-                            if (mascota->nombre[i] != nombre[i])
+                            if (mascota.nombre[i] != nombre[i])
                                 igualdad = -1;
                         }
 
                         if (igualdad == 0)
                         {
-                            mascota->nombre[contador] = 0;
+                            mascota.nombre[contador] = 0;
                             //printf("Id: %ld    Nombre: %s\n", mascota.id, mascota.nombre);
-                            enviarMensaje(mascota, sizeof(struct dogType));
+                            enviarMensaje(&mascota.id, sizeof(mascota.id));
                             mascotasEncontradas++;
                         }
                     }
@@ -676,8 +681,9 @@ void buscarRegistro()
     { //************Error al abrir el archivo -- por que no existe
         printf("No existen registros en la tabla Hash\n");
     }
+    long int finOperacion = -2;
+    enviarMensaje(&finOperacion, sizeof(finOperacion));
     fclose(archivo1);
-    */
 }
 
 void seleccionarOpcion(int opcion)
@@ -699,6 +705,7 @@ void seleccionarOpcion(int opcion)
         break;
     case 5:
         printf("Cerrando Conexión.\n");
+        clientesConectados--;
         break;
     default:
         printf("No es una opción valida. Volverá al Menú principal\n");
@@ -730,14 +737,16 @@ int main()
         }
     }
 
+    /*
     int r;
-
+    
     r = send(clientfd, "hola mundo", 10, 0);
     if (r < 0)
     {
         perror("\n-->Error en send(): ");
         exit(-1);
     }
+    */
 
     close(clientfd);
     close(serverfd);
