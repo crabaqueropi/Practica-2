@@ -18,7 +18,7 @@
 #include <pthread.h>
 
 #define PORT 3535
-#define BACKLOG 3 //Numero máximo de clientes
+#define BACKLOG 35 //Numero máximo de clientes
 
 int clientesConectados = 0;
 
@@ -341,11 +341,236 @@ void guardarEnTablaHash(char const *nombre, int longitudTexto, long int id)
     fclose(archivo1);
 }
 
-void ingresarRegistro()
+void ingresarRegistro(int clienteID)
 {
+    // ------------Variables a usar-------------------
+    //Variables Lectura Datos
+    struct dogType dato;
+    //Variables guardar registros
+    FILE *apdata, *aproom, *temp;
+    int r;
+    //Variables id
+    long int idTraspaso;
+    int idDisponible = 0;
+    long int numRegEliminadosAntiguos = numRegEliminados;
+
+    recibirMensaje(clienteID, &dato, sizeof(struct dogType));
+
+    struct dogType *dog;
+    dog = &dato;
+
+    apdata = fopen("dataDogs.dat", "rb+");
+    if (apdata == NULL)
+    {
+        perror("Error in fopen");
+    }
+    //Revisar si hay espacios disponibles borrados anteriormente
+    if (aproom = fopen("deletedId.dat", "rb+"))
+    {
+        //
+        temp = fopen("temp.dat", "wb+");
+        if (temp == NULL)
+        {
+            perror("Error en fopen");
+        }
+        //fseek ubica el puntero al Inicio del archivo
+        fseek(aproom, 0, SEEK_SET);
+        if (numRegEliminadosAntiguos > 0)
+        {
+            for (long int i = 0; i < numRegEliminadosAntiguos; i++)
+            {
+                r = fread(&idTraspaso, sizeof(long int), 1, aproom);
+                if (r == 0)
+                {
+                    perror("Error en fread");
+                    exit(-1);
+                }
+                if (i == 0)
+                { // Tomaremos el primer id para asignar el nuevo registro
+                    dato.id = idTraspaso;
+                    idDisponible = 1;
+                    fseek(apdata, (idTraspaso) * (sizeof(struct dogType)), SEEK_SET);
+                    //Actualizacion Variables Globales
+                    numRegEliminados = numRegEliminados - 1;
+                    numRegTotales = numMaxRegHistorial - numRegEliminados;
+                }
+                else
+                {
+                    r = fwrite(&idTraspaso, sizeof(long int), 1, temp);
+                    if (r == 0)
+                    {
+                        perror("Error en fwrite temp.dat");
+                        exit(-1);
+                    }
+                }
+            }
+        }
+        //Cerrar Archivo
+        r = fclose(aproom);
+        if (r != 0)
+        {
+            perror("Error en fclose deletedId.dat");
+            exit(-1);
+        }
+        r = fclose(temp);
+        if (r != 0)
+        {
+            perror("Error en fclose temp.dat");
+            exit(-1);
+        }
+        //Borrado de Archivo Deleteid y cambio de nombre de temp por deleteid
+        system("rm deletedId.dat");
+        system("mv temp.dat deletedId.dat");
+    }
+    // Si no encontro espacios disponibles borrados anteriormente
+    if (idDisponible == 0)
+    {
+        dato.id = numMaxRegHistorial; //asigo el id siguiente al mas grande que exista
+        //fseek ubica el puntero al final del archivo
+        fseek(apdata, 0, SEEK_END);
+        //Actualizacion Variables Globales
+        numRegEliminados = 0;
+        numMaxRegHistorial = numMaxRegHistorial + 1;
+        numRegTotales = numMaxRegHistorial;
+    }
+    // Proceso de Guardado
+    r = fwrite(dog, sizeof(struct dogType), 1, apdata);
+    if (r == 0)
+    {
+        perror("Error en fwrite");
+        exit(-1);
+    }
+    else
+    {
+        // printf("El registro fue creado con Exito con id: %ld \n", dato.id);
+        enviarMensaje(clienteID, &dato.id, sizeof(long int));
+    }
+    //Cerrar Archivo
+    r = fclose(apdata);
+    if (r != 0)
+    {
+        perror("Error en fclose dataDogs.dat");
+        exit(-1);
+    }
+
+    //----------------Ubicacion Tabla Hash-----------------------
+    pasarMinusculas(dato.nombre);
+    int contador = 0;
+    while (dato.nombre[++contador] != 0)
+        ;
+    guardarEnTablaHash(dato.nombre, contador, dato.id);
 }
-void verRegistro()
+void verRegistro(int clienteID)
 {
+    long int env[2];
+    env[0] = numRegTotales;
+    env[1] = numMaxRegHistorial;
+    enviarMensaje(clienteID, &env, sizeof(env));
+    //----------------Variables --------------------
+    long int idVer; // id a buscar
+    int archivo;
+    struct dogType dog;
+    FILE *apdata;
+    char abrir;
+    int r;
+    char nombreHC[32]; // nombre historia clinica
+    char respuesta[32];
+    //--------------Verificacion de datos-------------
+    // abrir archivo datos
+    apdata = fopen("dataDogs.dat", "rb");
+    if (apdata == NULL)
+    {
+        perror("Error in fopen apdata");
+    }
+    else
+    {
+        recibirMensaje(clienteID, &idVer, sizeof(idVer));
+        //fseek ubica el puntero en el id a ver
+        fseek(apdata, (idVer) * (sizeof(struct dogType)), SEEK_SET);
+        //fread lee el archivo en la posicion dada
+        r = fread(&dog, (sizeof(struct dogType)), 1, apdata);
+        if (r == 0)
+        {
+            perror("Error en fread");
+        }
+        else
+        {
+            enviarMensaje(clienteID, &dog, sizeof(struct dogType));
+            if (dog.id == -1)
+            {
+                printf("El Registro no Existe\n"); // preguntar que hacer aqui
+            }
+            else
+            {
+                recibirMensaje(clienteID, &abrir, sizeof(abrir));
+                if (abrir == 'S' || abrir == 's')
+                {
+                    strcpy(respuesta, "abrio historia clinica \n");
+                    enviarMensaje(clienteID, &respuesta, sizeof(respuesta));
+
+                    // si existe la historia clinica
+                    //concatena el Id con .txt
+                    sprintf(nombreHC, "%ld", dog.id);
+                    strcat(nombreHC, ".txt");
+                    // Usa la libreria de control de archivos, busca si existe el archivo
+                    // el primer parametro nombre archivo
+                    // segundo parametro cuando se abre el archivo
+                    // tercer parametro permisos sobre el archivo
+                    archivo = open(nombreHC, O_CREAT | O_WRONLY | O_EXCL, S_IWUSR | S_IRUSR);
+                    if (archivo < 0)
+                    {
+                        // si el archivo ya se creo
+                        if (errno == EEXIST)
+                        {
+                            // abre el archivo con la historia clinica
+                            char consola[32] = "xdg-open ";
+                            strcat(consola, nombreHC);
+                            system(consola);
+                        }
+                        else
+                        {
+                            perror("Error al leer el archivo");
+                        }
+                    }
+                    else
+                    {
+                        // llena el archivo nuevo con los datos
+                        FILE *hc = fopen(nombreHC, "wb+");
+                        fprintf(hc, "--------------------------------------------------------------------------\n");
+                        fprintf(hc, "--------------------------Historia Clinica--------------------------------\n");
+                        fprintf(hc, "Id: %ld \n", dog.id);
+                        fprintf(hc, "Nombre: %s\n", dog.nombre);
+                        fprintf(hc, "Tipo: %s\n", dog.tipo);
+                        fprintf(hc, "Edad: %i \n", dog.edad);
+                        fprintf(hc, "Raza: %s\n", dog.raza);
+                        fprintf(hc, "Estatura: %i \n", dog.estatura);
+                        fprintf(hc, "Peso: %f \n", dog.peso);
+                        fprintf(hc, "Sexo: %c \n", dog.sexo);
+                        fprintf(hc, "--------------------------------------------------------------------------\n");
+                        fclose(hc);
+                        // abre el archivo
+                        char consola[] = "xdg-open ";
+                        strcat(consola, nombreHC);
+                        system(consola);
+                    }
+                }
+
+                // no abre historia
+                else if (abrir == 'N' || abrir == 'n')
+                {
+                    strcpy(respuesta, "No abrio historia clinica \n");
+                    enviarMensaje(clienteID, &respuesta, sizeof(respuesta));
+                }
+                else
+                {
+                    strcpy(respuesta, "Error al ingresar Valores \n");
+                    enviarMensaje(clienteID, &respuesta, sizeof(respuesta));
+                }
+            }
+        }
+        // cerrar
+        fclose(apdata);
+    }
 }
 void borrarRegistro(int clienteID)
 {
@@ -711,10 +936,10 @@ void *seleccionarOpcion(void *ap)
             switch (opcion)
             {
             case 1:
-                ingresarRegistro();
+                ingresarRegistro(*clienteID);
                 break;
             case 2:
-                verRegistro();
+                verRegistro(*clienteID);
                 break;
             case 3:
                 borrarRegistro(*clienteID);
@@ -732,7 +957,7 @@ void *seleccionarOpcion(void *ap)
                 printf("No es una opción valida. Volverá al Menú principal\n");
                 break;
             }
-        }while (opcion != 5);
+        } while (opcion != 5);
     }
 }
 

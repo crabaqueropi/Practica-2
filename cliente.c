@@ -88,10 +88,73 @@ void pasarMinusculas(char cadena[])
 
 void ingresarRegistro(void *ap)
 {
+    struct dogType dato;
+    printf("Digite nombre:\n");
+    scanf("%s", dato.nombre);
+    printf("Digite tipo:\n");
+    scanf("%s", dato.tipo);
+    printf("Digite edad:\n");
+    scanf("%i", &dato.edad);
+    printf("Digite raza:\n");
+    scanf("%s", dato.raza);
+    printf("Digite estatura (en cm):\n");
+    scanf("%i", &dato.estatura);
+    printf("Digite peso:\n");
+    scanf("%f", &dato.peso);
+    printf("Digite sexo (M/F):\n");
+    scanf("%s", &dato.sexo);
+
+    enviarMensaje(&dato, sizeof(struct dogType));
+
+    long int id;
+    recibirMensaje(&id, sizeof(id));
+    printf("El registro fue creado con Exito con id: %ld \n", id);
 }
 void verRegistro()
 {
+    long int idVer;  // id a buscar
+    long int rec[2]; // rec[0]= # de registros Totales --- rec[1]= Numero maximo de registros
+    struct dogType dog;
+    char abrir;
+    char respuesta[32];
+
+    recibirMensaje(&rec, sizeof(rec));
+
+    //Muestra numero de registros presentes
+    printf("Existe un total de : %ld  Registros\n", rec[0]);
+    //Pregunta registro a ver
+    printf("Digite registro a ver:\n");
+    scanf("%ld", &idVer);
+    if (idVer < 0 || idVer >= rec[1])
+    {
+        printf("El Registro no Existe\n");
+    }
+    else
+    {
+        enviarMensaje(&idVer, sizeof(idVer));
+        recibirMensaje(&dog, sizeof(struct dogType));
+
+        if (dog.id == -1)
+        {
+            printf("El Registro no Existe\n");
+        }
+        else
+        {
+            printf("-------------------------------\n");
+            printf("Nombre: %s\n", dog.nombre);
+            printf("Id: %ld \n", dog.id);
+            printf("-------------------------------\n");
+            //--------------------Historia clinica----------------------
+            // pregunta si desea abrir la historia clinica
+            printf("¿Abrir Historia Clinica? S/N \n");
+            scanf("%s", &abrir);
+            enviarMensaje(&abrir, sizeof(abrir));
+            recibirMensaje(&respuesta, sizeof(respuesta));
+            printf("%s", respuesta);
+        }
+    }
 }
+
 void borrarRegistro()
 {
     long int idBorrar;
