@@ -207,25 +207,28 @@ void verRegistro()
             enviarMensaje(&abrir, sizeof(abrir));
             recibirMensaje(&respuesta, sizeof(respuesta));
             printf("%s", respuesta);
-            //recibe el nombre de la historia clinica
-            char nombreHC[32];
-            recibirMensaje(&nombreHC, sizeof(nombreHC));
-            //recibe la historia clinica y la abre
-            recibirArchivo(nombreHC);
-            //strcat(nombreHC,"cliente");
-            char consola[32] = "xdg-open ";
-            strcat(consola, nombreHC);
-            system(consola);
-            //oprime enter para enviar historia al servidor
-            printf("\nPulse ENTER para actualizar historia clinica\n");
-            while (getchar() != '\n')
-                ;
-            getchar();
-            enviarArchivo(nombreHC);
-            //Remueve la historia clinica
-            if (remove(nombreHC) != 0)
+            if (abrir == 'S' || abrir == 's')
             {
-                perror("No se pudo eliminar el archivo\n");
+                //recibe el nombre de la historia clinica
+                char nombreHC[32];
+                recibirMensaje(&nombreHC, sizeof(nombreHC));
+                //recibe la historia clinica y la abre
+                recibirArchivo(nombreHC);
+                //strcat(nombreHC,"cliente");
+                char consola[32] = "xdg-open ";
+                strcat(consola, nombreHC);
+                system(consola);
+                //oprime enter para enviar historia al servidor
+                printf("\nPulse ENTER para actualizar historia clinica\n");
+                while (getchar() != '\n')
+                    ;
+                getchar();
+                enviarArchivo(nombreHC);
+                //Remueve la historia clinica
+                if (remove(nombreHC) != 0)
+                {
+                    perror("No se pudo eliminar el archivo\n");
+                }
             }
         }
     }
