@@ -129,7 +129,7 @@ struct infoCliente aceptarConexion()
     else
     {
         clientesConectados++;
-        printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
+        //printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
     }
 
     struct sockaddr_in *ipv4Addr;
@@ -164,6 +164,61 @@ void recibirMensaje(int clienteID, void *pointer, size_t len)
     {
         perror("Error receiving menu option");
     }
+}
+
+void enviarArchivo(int clienteID, char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "r+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    if (fseek(f, 0, SEEK_END) != 0)
+    {
+        perror("error en seek archivo");
+        return;
+    }
+    long lenght = ftell(f);
+    rewind(f);
+    do
+    {
+        if (fread(buff, (lenght < size) ? lenght : size, 1, f) <= 0)
+        {
+            perror("error en leer el archivo");
+            return;
+        }
+        enviarMensaje(clienteID, buff, (lenght < size) ? lenght : size);
+        lenght -= size;
+    } while (lenght >= 0);
+}
+
+void recibirArchivo(int clienteID, char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "w+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    do
+    {
+        bzero(buff, size);
+        bytesRead = recv(clienteID, buff, size, 0);
+        if (buff[0] == -1)
+        {
+            printf("Empty file\n");
+            break;
+        }
+        fwrite(buff, bytesRead, 1, f);
+    } while (bytesRead == size);
+    fclose(f);
 }
 
 //----------------Log
@@ -666,10 +721,12 @@ void verRegistro(struct infoCliente clienteInfo)
                         // si el archivo ya se creo
                         if (errno == EEXIST)
                         {
-                            // abre el archivo con la historia clinica
-                            char consola[32] = "xdg-open ";
-                            strcat(consola, nombreHC);
-                            system(consola);
+                            // enviar nombre de el archivo de la historia clinica
+                            enviarMensaje(clienteID, nombreHC, sizeof(nombreHC));
+                            //enviar historia clinica
+                            enviarArchivo(clienteID, nombreHC);
+                            //recibe el archivo actualizado
+                            recibirArchivo(clienteID, nombreHC);
                         }
                         else
                         {
@@ -692,10 +749,9 @@ void verRegistro(struct infoCliente clienteInfo)
                         fprintf(hc, "Sexo: %c \n", dog.sexo);
                         fprintf(hc, "--------------------------------------------------------------------------\n");
                         fclose(hc);
-                        // abre el archivo
-                        char consola[] = "xdg-open ";
-                        strcat(consola, nombreHC);
-                        system(consola);
+                        enviarMensaje(clienteID, nombreHC, sizeof(nombreHC));
+                        enviarArchivo(clienteID, nombreHC);
+                        recibirArchivo(clienteID, nombreHC);
                     }
                 }
 
@@ -1082,7 +1138,8 @@ void *seleccionarOpcion(void *ap)
 
     if (clienteInfo->clientfd != -1)
     {
-        printf("\n****Cliente: %i\n", clienteInfo->clientfd);
+        //printf("\n****Cliente: %i\n", clienteInfo->clientfd);
+
         int opcion;
         //int clienteMostrar = *clienteID;
         struct infoCliente clienteMostrar = *clienteInfo;
@@ -1090,7 +1147,8 @@ void *seleccionarOpcion(void *ap)
         do
         {
             recibirMensaje(clienteInfo->clientfd, &opcion, sizeof(int));
-            printf("\nCliente: %i   Opción: %i\n", clienteMostrar.clientfd, opcion);
+
+            //printf("\nCliente: %i   Opción: %i\n", clienteMostrar.clientfd, opcion);
 
             switch (opcion)
             {
@@ -1107,9 +1165,9 @@ void *seleccionarOpcion(void *ap)
                 buscarRegistro(*clienteInfo);
                 break;
             case 5:
-                printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar.clientfd);
+                //printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar.clientfd);
                 clientesConectados--;
-                printf("\nClientes conectados: %i\n", clientesConectados);
+                //printf("\nClientes conectados: %i\n", clientesConectados);
                 close(clienteInfo->clientfd);
                 break;
             case 6:
