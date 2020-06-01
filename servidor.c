@@ -129,7 +129,7 @@ struct infoCliente aceptarConexion()
     else
     {
         clientesConectados++;
-        printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
+        //printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
     }
 
     struct sockaddr_in *ipv4Addr;
@@ -1082,7 +1082,8 @@ void *seleccionarOpcion(void *ap)
 
     if (clienteInfo->clientfd != -1)
     {
-        printf("\n****Cliente: %i\n", clienteInfo->clientfd);
+        //printf("\n****Cliente: %i\n", clienteInfo->clientfd);
+        
         int opcion;
         //int clienteMostrar = *clienteID;
         struct infoCliente clienteMostrar = *clienteInfo;
@@ -1090,7 +1091,8 @@ void *seleccionarOpcion(void *ap)
         do
         {
             recibirMensaje(clienteInfo->clientfd, &opcion, sizeof(int));
-            printf("\nCliente: %i   Opción: %i\n", clienteMostrar.clientfd, opcion);
+
+            //printf("\nCliente: %i   Opción: %i\n", clienteMostrar.clientfd, opcion);
 
             switch (opcion)
             {
@@ -1107,9 +1109,9 @@ void *seleccionarOpcion(void *ap)
                 buscarRegistro(*clienteInfo);
                 break;
             case 5:
-                printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar.clientfd);
+                //printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar.clientfd);
                 clientesConectados--;
-                printf("\nClientes conectados: %i\n", clientesConectados);
+                //printf("\nClientes conectados: %i\n", clientesConectados);
                 close(clienteInfo->clientfd);
                 break;
             case 6:
