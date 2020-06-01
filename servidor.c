@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <pthread.h>
+#include <time.h>
+#include <string.h>
 
 #define PORT 3535
 #define BACKLOG 35 //Numero máximo de clientes
@@ -51,6 +53,20 @@ struct nodoType
     long int siguiente;
 };
 
+struct infoCliente
+{
+    int clientfd;
+    char ip[16];
+};
+
+struct Log
+{
+    char date[20];
+    char ip[16];
+    char operacion[10];
+    char input[50];
+};
+
 void sig_handler(int signo)
 {
     if (signo == SIGINT)
@@ -60,6 +76,7 @@ void sig_handler(int signo)
     _exit(0);
 }
 
+//---------------Servidor (funciones)
 void iniciarServidor()
 {
     if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -91,11 +108,12 @@ void iniciarServidor()
 }
 
 //devuelve 1 si es true y 0 si es falso
-int aceptarConexion()
+struct infoCliente aceptarConexion()
 {
     //addrlen = sizeof(dummyAddr);
     //socketClient = accept(socketServer, (struct sockaddr*) &dummyAddr, &addrlen);
     struct sockaddr_in client;
+    struct infoCliente clienteInfo;
 
     int clientfd;
     socklen_t tamano;
@@ -106,7 +124,7 @@ int aceptarConexion()
     {
         perror("Error with connection.");
         //memset(ipDirection, -1, sizeof(ipDirection));
-        return 0;
+        return clienteInfo;
     }
     else
     {
@@ -114,13 +132,21 @@ int aceptarConexion()
         printf("\nConexión exitosa: Clientes conectados %i\n", clientesConectados);
     }
 
-    /*
+    struct sockaddr_in *ipv4Addr;
+    struct in_addr ipAddr;
+    char ipDirection[INET_ADDRSTRLEN];
+
     ipv4Addr = (struct sockaddr_in *)&client;
     ipAddr = ipv4Addr->sin_addr;
 
     inet_ntop(AF_INET, &ipAddr, ipDirection, sizeof(ipDirection));
-    */
-    return clientfd;
+    //printf("%s\n",ipDirection); //127.0.0.1
+
+    clienteInfo.clientfd = clientfd;
+    strcpy(clienteInfo.ip, ipDirection);
+    //clienteInfo.ip = ipDirection;
+
+    return clienteInfo;
 }
 
 void enviarMensaje(int clienteID, void *mensaje, size_t len)
@@ -139,6 +165,107 @@ void recibirMensaje(int clienteID, void *pointer, size_t len)
         perror("Error receiving menu option");
     }
 }
+
+//----------------Log
+
+struct Log *AuxLog;
+FILE *logger;
+
+void iniciarLogger()
+{
+    AuxLog = malloc(sizeof(struct Log));
+
+    if ((logger = fopen("serverDogs.log", "ab+")) == NULL)
+    {
+        perror("Error al intentar abrir el archivo Log");
+        return;
+    }
+}
+
+void cerrarLogger()
+{
+    int r = fclose(logger);
+    if (r != 0)
+    {
+        perror("Error en fclose dataDogs.dat");
+        exit(-1);
+    }
+}
+
+void imprimirLog(struct Log *log)
+{
+    printf("\nFecha: %s | Cliente %s | Operación %s | Input: %s\n", log->date, log->ip, log->operacion, log->input);
+}
+
+void imprimirTodosLog()
+{
+    iniciarLogger();
+
+    fseek(logger, 0, SEEK_END);
+    long ultimaPosicion = ftell(logger);
+    fseek(logger, 0, SEEK_SET);
+
+    long cantidadLogs = ultimaPosicion / (sizeof(struct Log));
+
+    for (long i = 0; i < cantidadLogs; i++)
+    {
+        //bzero(AuxLog, sizeof(AuxLog));
+        int r = fread(AuxLog, (sizeof(struct Log)), 1, logger);
+        if (r == 0)
+        {
+            //perror("Error en fread");
+            printf("\nFin Log\n");
+        }
+        else
+        {
+            imprimirLog(AuxLog);
+        }
+    }
+
+    cerrarLogger();
+}
+
+void guardarRegistroLogger(char ip[], char operacion[], char input[])
+{
+    iniciarLogger();
+
+    bzero(AuxLog, sizeof(AuxLog));
+
+    time_t tiempo = time(0);
+    struct tm *tlocal = localtime(&tiempo);
+    char output[20];
+    strftime(output, 20, "%Y-%m-%dT%H:%M:%S", tlocal);
+    //printf("%s\n", output);
+
+    //AuxLog->date = output;
+    //mempcpy(AuxLog->date, output, sizeof(AuxLog->date));
+    strcpy(AuxLog->date, output);
+    //AuxLog->ip = ip;
+    //mempcpy(AuxLog->ip, ip, sizeof(AuxLog->ip));
+    strcpy(AuxLog->ip, ip);
+    //AuxLog->operacion = operacion;
+    //mempcpy(AuxLog->operacion, operacion, sizeof(AuxLog->operacion));
+    strcpy(AuxLog->operacion, operacion);
+    //AuxLog->input = input;
+    //mempcpy(AuxLog->input, input, sizeof(AuxLog->input));
+    strcpy(AuxLog->input, input);
+
+    int r = fwrite(AuxLog, sizeof(struct Log), 1, logger);
+    if (r == 0)
+    {
+        perror("Error en fwrite");
+        exit(-1);
+    }
+    else
+    {
+        //printf("El registro Log fue guardado con Exito\n");
+        //imprimirLog(AuxLog);
+    }
+
+    cerrarLogger();
+}
+
+//----------------Funciones Auxiliares
 
 void obtenerNumReg()
 {
@@ -341,8 +468,9 @@ void guardarEnTablaHash(char const *nombre, int longitudTexto, long int id)
     fclose(archivo1);
 }
 
-void ingresarRegistro(int clienteID)
+void ingresarRegistro(struct infoCliente clienteInfo)
 {
+    int clienteID = clienteInfo.clientfd;
     // ------------Variables a usar-------------------
     //Variables Lectura Datos
     struct dogType dato;
@@ -444,6 +572,12 @@ void ingresarRegistro(int clienteID)
     {
         // printf("El registro fue creado con Exito con id: %ld \n", dato.id);
         enviarMensaje(clienteID, &dato.id, sizeof(long int));
+
+        //guardar Log
+        char idCHAR[50];
+        sprintf(idCHAR, "%ld", dato.id);
+        guardarRegistroLogger(clienteInfo.ip, "INSERCION", idCHAR);
+        //--
     }
     //Cerrar Archivo
     r = fclose(apdata);
@@ -460,8 +594,11 @@ void ingresarRegistro(int clienteID)
         ;
     guardarEnTablaHash(dato.nombre, contador, dato.id);
 }
-void verRegistro(int clienteID)
+
+void verRegistro(struct infoCliente clienteInfo)
 {
+    int clienteID = clienteInfo.clientfd;
+
     long int env[2];
     env[0] = numRegTotales;
     env[1] = numMaxRegHistorial;
@@ -496,9 +633,16 @@ void verRegistro(int clienteID)
         else
         {
             enviarMensaje(clienteID, &dog, sizeof(struct dogType));
+
+            //guardar Log
+            char idCHAR[50];
+            sprintf(idCHAR, "%ld", idVer);
+            guardarRegistroLogger(clienteInfo.ip, "LECTURA", idCHAR);
+            //--
+
             if (dog.id == -1)
             {
-                printf("El Registro no Existe\n"); // preguntar que hacer aqui
+                //printf("El Registro no Existe\n"); // preguntar que hacer aqui
             }
             else
             {
@@ -572,8 +716,11 @@ void verRegistro(int clienteID)
         fclose(apdata);
     }
 }
-void borrarRegistro(int clienteID)
+
+void borrarRegistro(struct infoCliente clienteInfo)
 {
+    int clienteID = clienteInfo.clientfd;
+
     long int env[2];
     env[0] = numRegTotales;
     env[1] = numMaxRegHistorial;
@@ -647,6 +794,12 @@ void borrarRegistro(int clienteID)
         //Mensaje éxito
         //printf("\nSe eliminó el registro %li Correctamente!\n", idBorrar);
         enviarMensaje(clienteID, &idBorrar, sizeof(idBorrar));
+
+        //guardar Log
+        char idCHAR[50];
+        sprintf(idCHAR, "%ld", idBorrar);
+        guardarRegistroLogger(clienteInfo.ip, "BORRADO", idCHAR);
+        //--
 
         //----------------Remover de Tabla Hash-----------------------
         pasarMinusculas(nombre);
@@ -786,13 +939,17 @@ void borrarRegistro(int clienteID)
     }
 }
 
-void buscarRegistro(int clienteID)
+void buscarRegistro(struct infoCliente clienteInfo)
 {
+    int clienteID = clienteInfo.clientfd;
+
     char nombre[32];
     recibirMensaje(clienteID, nombre, sizeof(nombre));
-    printf("Nombre: %s\n", nombre);
+    //printf("Nombre: %s\n", nombre);
 
-    //registerOperation(getClientIp(), READING, nombre, sizeof(nombre));
+    //guardar Log
+    guardarRegistroLogger(clienteInfo.ip, "BUSQUEDA", nombre);
+    //--
 
     FILE *archivo1;
     FILE *archivo2;
@@ -920,38 +1077,43 @@ void buscarRegistro(int clienteID)
 void *seleccionarOpcion(void *ap)
 {
 
-    int *clienteID = ap;
+    //int *clienteID = ap;
+    struct infoCliente *clienteInfo = ap;
 
-    if (*clienteID != -1)
+    if (clienteInfo->clientfd != -1)
     {
-        printf("\n****Cliente: %i\n", *clienteID);
+        printf("\n****Cliente: %i\n", clienteInfo->clientfd);
         int opcion;
-        int clienteMostrar = *clienteID;
+        //int clienteMostrar = *clienteID;
+        struct infoCliente clienteMostrar = *clienteInfo;
 
         do
         {
-            recibirMensaje(*clienteID, &opcion, sizeof(int));
-            printf("\nOpción: %i    Cliente: %i\n", opcion, clienteMostrar);
+            recibirMensaje(clienteInfo->clientfd, &opcion, sizeof(int));
+            printf("\nCliente: %i   Opción: %i\n", clienteMostrar.clientfd, opcion);
 
             switch (opcion)
             {
             case 1:
-                ingresarRegistro(*clienteID);
+                ingresarRegistro(*clienteInfo);
                 break;
             case 2:
-                verRegistro(*clienteID);
+                verRegistro(*clienteInfo);
                 break;
             case 3:
-                borrarRegistro(*clienteID);
+                borrarRegistro(*clienteInfo);
                 break;
             case 4:
-                buscarRegistro(*clienteID);
+                buscarRegistro(*clienteInfo);
                 break;
             case 5:
-                printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar);
+                printf("Cerrando Conexión. (Cliente: %i)\n", clienteMostrar.clientfd);
                 clientesConectados--;
                 printf("\nClientes conectados: %i\n", clientesConectados);
-                close(*clienteID);
+                close(clienteInfo->clientfd);
+                break;
+            case 6:
+                imprimirTodosLog();
                 break;
             default:
                 printf("No es una opción valida. Volverá al Menú principal\n");
@@ -967,23 +1129,26 @@ int main()
         printf("\ncan't catch SIGINT\n");
 
     iniciarServidor();
+    sleep(1);
     obtenerNumReg();
 
     //int opcion = 0;
 
     pthread_t hilo[BACKLOG];
-    int clientes[BACKLOG];
+    //int clientes[BACKLOG];
     int r;
     int conta = 0;
-    int clienteID;
+    //int clienteID;
+    struct infoCliente clienteInfo;
+    struct infoCliente clientes[BACKLOG];
 
     while (true)
     {
-        clienteID = aceptarConexion();
-        if (clienteID > 0)
+        clienteInfo = aceptarConexion();
+        if (clienteInfo.clientfd > 0)
         {
-            clientes[conta] = clienteID;
-            clientfd = clienteID;
+            clientes[conta] = clienteInfo;
+            clientfd = clienteInfo.clientfd;
             r = pthread_create(&hilo[conta], NULL, (void *)seleccionarOpcion, (void *)&clientes[conta]);
             if (r != 0)
             {
@@ -992,7 +1157,7 @@ int main()
             }
             //seleccionarOpcion();
             conta++;
-            clienteID = -1;
+            clienteInfo.clientfd = -1;
         }
     }
     close(serverfd);

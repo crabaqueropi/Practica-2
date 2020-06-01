@@ -258,6 +258,9 @@ void mostrarMenu()
         case 5:
             programaCorriendo = 0;
             break;
+        case 6:
+            printf("Imprimir Log's en el Servidor\n");
+            break;
         default:
             printf("No es una opción valida. Volverá al Menú principal\n");
             break;
@@ -274,10 +277,6 @@ int main(int argc, char *argv[])
 {
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         printf("\ncan't catch SIGINT\n");
-
-    int r;
-
-    char buffer[32];
 
     solicitarConexion();
     //while (1)
