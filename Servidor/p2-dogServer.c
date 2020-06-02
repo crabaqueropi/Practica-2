@@ -109,15 +109,11 @@ void iniciarServidor()
 
 socklen_t tamano;
 
-//devuelve 1 si es true y 0 si es falso
 struct infoCliente aceptarConexion()
 {
-    //addrlen = sizeof(dummyAddr);
-    //socketClient = accept(socketServer, (struct sockaddr*) &dummyAddr, &addrlen);
     struct sockaddr_in client;
     struct infoCliente clienteInfo;
 
-    //client = malloc(sizeof(struct sockaddr_in));
 
     int clientfd;
     tamano = sizeof(client);
@@ -127,7 +123,6 @@ struct infoCliente aceptarConexion()
     if (clientfd == -1)
     {
         perror("Error with connection.");
-        //memset(ipDirection, -1, sizeof(ipDirection));
         return clienteInfo;
     }
     else
@@ -145,7 +140,7 @@ struct infoCliente aceptarConexion()
 
     inet_ntop(AF_INET, &ipAddr, ipDirection, sizeof(ipDirection));
     
-    printf("Cliente: %i     Ip: %s\n",clientfd, ipDirection); //127.0.0.1
+    //printf("Cliente: %i     Ip: %s\n",clientfd, ipDirection); //127.0.0.1
 
     clienteInfo.clientfd = clientfd;
     strcpy(clienteInfo.ip, ipDirection);
