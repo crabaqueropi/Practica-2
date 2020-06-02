@@ -20,7 +20,7 @@
 #include <string.h>
 
 #define PORT 3535
-#define BACKLOG 35 //Numero máximo de clientes
+#define BACKLOG 32 //Numero máximo de clientes
 
 int clientesConectados = 0;
 
@@ -107,23 +107,22 @@ void iniciarServidor()
     }
 }
 
-//devuelve 1 si es true y 0 si es falso
+socklen_t tamano;
+
 struct infoCliente aceptarConexion()
 {
-    //addrlen = sizeof(dummyAddr);
-    //socketClient = accept(socketServer, (struct sockaddr*) &dummyAddr, &addrlen);
     struct sockaddr_in client;
     struct infoCliente clienteInfo;
 
+
     int clientfd;
-    socklen_t tamano;
+    tamano = sizeof(client);
 
     clientfd = accept(serverfd, (struct sockaddr *)&client, &tamano);
 
     if (clientfd == -1)
     {
         perror("Error with connection.");
-        //memset(ipDirection, -1, sizeof(ipDirection));
         return clienteInfo;
     }
     else
@@ -140,7 +139,8 @@ struct infoCliente aceptarConexion()
     ipAddr = ipv4Addr->sin_addr;
 
     inet_ntop(AF_INET, &ipAddr, ipDirection, sizeof(ipDirection));
-    //printf("%s\n",ipDirection); //127.0.0.1
+    
+    //printf("Cliente: %i     Ip: %s\n",clientfd, ipDirection); //127.0.0.1
 
     clienteInfo.clientfd = clientfd;
     strcpy(clienteInfo.ip, ipDirection);
@@ -164,6 +164,61 @@ void recibirMensaje(int clienteID, void *pointer, size_t len)
     {
         perror("Error receiving menu option");
     }
+}
+
+void enviarArchivo(int clienteID, char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "r+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    if (fseek(f, 0, SEEK_END) != 0)
+    {
+        perror("error en seek archivo");
+        return;
+    }
+    long lenght = ftell(f);
+    rewind(f);
+    do
+    {
+        if (fread(buff, (lenght < size) ? lenght : size, 1, f) <= 0)
+        {
+            perror("error en leer el archivo");
+            return;
+        }
+        enviarMensaje(clienteID, buff, (lenght < size) ? lenght : size);
+        lenght -= size;
+    } while (lenght >= 0);
+}
+
+void recibirArchivo(int clienteID, char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "w+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    do
+    {
+        bzero(buff, size);
+        bytesRead = recv(clienteID, buff, size, 0);
+        if (buff[0] == -1)
+        {
+            printf("Empty file\n");
+            break;
+        }
+        fwrite(buff, bytesRead, 1, f);
+    } while (bytesRead == size);
+    fclose(f);
 }
 
 //----------------Log
@@ -206,6 +261,8 @@ void imprimirTodosLog()
     fseek(logger, 0, SEEK_SET);
 
     long cantidadLogs = ultimaPosicion / (sizeof(struct Log));
+
+    printf("\n*******************************\n");
 
     for (long i = 0; i < cantidadLogs; i++)
     {
@@ -666,10 +723,12 @@ void verRegistro(struct infoCliente clienteInfo)
                         // si el archivo ya se creo
                         if (errno == EEXIST)
                         {
-                            // abre el archivo con la historia clinica
-                            char consola[32] = "xdg-open ";
-                            strcat(consola, nombreHC);
-                            system(consola);
+                            // enviar nombre de el archivo de la historia clinica
+                            enviarMensaje(clienteID, nombreHC, sizeof(nombreHC));
+                            //enviar historia clinica
+                            enviarArchivo(clienteID, nombreHC);
+                            //recibe el archivo actualizado
+                            recibirArchivo(clienteID, nombreHC);
                         }
                         else
                         {
@@ -692,10 +751,9 @@ void verRegistro(struct infoCliente clienteInfo)
                         fprintf(hc, "Sexo: %c \n", dog.sexo);
                         fprintf(hc, "--------------------------------------------------------------------------\n");
                         fclose(hc);
-                        // abre el archivo
-                        char consola[] = "xdg-open ";
-                        strcat(consola, nombreHC);
-                        system(consola);
+                        enviarMensaje(clienteID, nombreHC, sizeof(nombreHC));
+                        enviarArchivo(clienteID, nombreHC);
+                        recibirArchivo(clienteID, nombreHC);
                     }
                 }
 
@@ -976,7 +1034,7 @@ void buscarRegistro(struct infoCliente clienteInfo)
 
         if (posEnTabla2 == -1)
         {
-            printf("\nNo existen registros con el nombre: %s\n", nombre);
+            //printf("\nNo existen registros con el nombre: %s\n", nombre);
         }
         else
         {
@@ -1056,7 +1114,7 @@ void buscarRegistro(struct infoCliente clienteInfo)
                 fclose(archivo2);
                 if (mascotasEncontradas == 0)
                 {
-                    printf("\nNo existen registros con el nombre: %s\n", nombre);
+                    //printf("\nNo existen registros con el nombre: %s\n", nombre);
                 }
             }
             else
@@ -1083,7 +1141,6 @@ void *seleccionarOpcion(void *ap)
     if (clienteInfo->clientfd != -1)
     {
         //printf("\n****Cliente: %i\n", clienteInfo->clientfd);
-        
         int opcion;
         //int clienteMostrar = *clienteID;
         struct infoCliente clienteMostrar = *clienteInfo;

@@ -78,6 +78,61 @@ void recibirMensaje(void *mensaje, size_t len)
     }
 }
 
+void enviarArchivo(char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "r+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    if (fseek(f, 0, SEEK_END) != 0)
+    {
+        perror("error en seek archivo");
+        return;
+    }
+    long lenght = ftell(f);
+    rewind(f);
+    do
+    {
+        if (fread(buff, (lenght < size) ? lenght : size, 1, f) <= 0)
+        {
+            perror("error en leer el archivo");
+            return;
+        }
+        enviarMensaje(buff, (lenght < size) ? lenght : size);
+        lenght -= size;
+    } while (lenght >= 0);
+}
+
+void recibirArchivo(char nombreHC[])
+{
+    int size = 1024;
+    char buff[1024];
+    int bytesRead;
+    FILE *f;
+    f = fopen(nombreHC, "w+");
+    if (f == NULL)
+    {
+        perror("error en abrir archivo");
+    }
+    do
+    {
+        bzero(buff, size);
+        bytesRead = recv(clientfd, buff, size, 0);
+        if (buff[0] == -1)
+        {
+            printf("Empty file\n");
+            break;
+        }
+        fwrite(buff, bytesRead, 1, f);
+    } while (bytesRead == size);
+    fclose(f);
+}
+
 void pasarMinusculas(char cadena[])
 {
     for (int indice = 0; cadena[indice] != '\0'; ++indice)
@@ -110,6 +165,7 @@ void ingresarRegistro(void *ap)
     recibirMensaje(&id, sizeof(id));
     printf("El registro fue creado con Exito con id: %ld \n", id);
 }
+
 void verRegistro()
 {
     long int idVer;  // id a buscar
@@ -151,6 +207,29 @@ void verRegistro()
             enviarMensaje(&abrir, sizeof(abrir));
             recibirMensaje(&respuesta, sizeof(respuesta));
             printf("%s", respuesta);
+            if (abrir == 'S' || abrir == 's')
+            {
+                //recibe el nombre de la historia clinica
+                char nombreHC[32];
+                recibirMensaje(&nombreHC, sizeof(nombreHC));
+                //recibe la historia clinica y la abre
+                recibirArchivo(nombreHC);
+                //strcat(nombreHC,"cliente");
+                char consola[32] = "xdg-open ";
+                strcat(consola, nombreHC);
+                system(consola);
+                //oprime enter para enviar historia al servidor
+                printf("\nPulse ENTER para actualizar historia clinica\n");
+                while (getchar() != '\n')
+                    ;
+                getchar();
+                enviarArchivo(nombreHC);
+                //Remueve la historia clinica
+                if (remove(nombreHC) != 0)
+                {
+                    perror("No se pudo eliminar el archivo\n");
+                }
+            }
         }
     }
 }
